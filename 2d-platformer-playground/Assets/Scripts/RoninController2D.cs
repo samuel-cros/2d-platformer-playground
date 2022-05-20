@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PlayerController2D : MonoBehaviour
+public class RoninController2D : MonoBehaviour
 {
 
     //---------------------------------------------------------------------------------
@@ -13,11 +13,11 @@ public class PlayerController2D : MonoBehaviour
     // MOVEMENTS
     [SerializeField] private float moveSpeed;
 
-    // JUMP
+    // JUMPS
     [SerializeField] private float jumpSpeed;
     private bool grounded;
-
-
+    [SerializeField] private int additionalJumps = 1;
+    private int jumpsLeft;
 
     //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
     // AWAKE
@@ -46,7 +46,7 @@ public class PlayerController2D : MonoBehaviour
 
         //---------------------------------------------------------------------------------
         // JUMP
-        if (Input.GetKeyDown(KeyCode.Space) && grounded)
+        if (Input.GetKeyDown(KeyCode.Space) && ((jumpsLeft > 0) || grounded))
         {
             Jump();
             Debug.Log("Jump");
@@ -76,6 +76,10 @@ public class PlayerController2D : MonoBehaviour
         {
             grounded = false;
         }
+        else
+        {
+            jumpsLeft -= 1;
+        }
     }
 
     //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
@@ -85,6 +89,7 @@ public class PlayerController2D : MonoBehaviour
         if (collision.gameObject.tag == "Ground" && Physics2D.Raycast(transform.position, Vector2.down, transform.localScale.y / 4.4f))
         {
             grounded = true;
+            jumpsLeft = additionalJumps;
         }
 
     }
