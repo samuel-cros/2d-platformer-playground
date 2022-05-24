@@ -9,7 +9,7 @@ public class RoninController2D : MonoBehaviour
     // GENERAL
     private Rigidbody2D body;
     private Animator anim;
-    private Collider2D collid;
+    //private Collider2D collid;
 
     // MOVEMENTS
     [SerializeField] private float moveSpeed;
@@ -26,6 +26,7 @@ public class RoninController2D : MonoBehaviour
     [SerializeField] private float blinkDistance;
     private float blinkTimer = 0f;
     [SerializeField] private float blinkCooldown = 2f;
+    [SerializeField] private float reducedBlinkCooldown = 0.5f;
 
     //oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
     // AWAKE
@@ -34,7 +35,7 @@ public class RoninController2D : MonoBehaviour
         // Grab references from game object
         body = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
-        collid = GetComponent<Collider2D>();
+        //collid = GetComponent<Collider2D>();
 
     }
 
@@ -80,12 +81,13 @@ public class RoninController2D : MonoBehaviour
 
         //---------------------------------------------------------------------------------
         // ANIMATOR
-            anim.SetBool("run", horizontalInput != 0);
+        anim.SetBool("run", horizontalInput != 0);
         anim.SetBool("grounded", grounded);
 
         //---------------------------------------------------------------------------------
         // DEBUG
-        Debug.DrawLine(transform.position, (transform.position + Vector3.down * transform.localScale.y / 4.4f), Color.green);
+        Debug.DrawLine(transform.position, (transform.position + Vector3.down * transform.localScale.y / 4.4f), Color.green); // Grounded debug, couldn't yet find a formula to replace "4.4f"
+        Debug.DrawRay(transform.position, mouseDirection, Color.green); // Blink debug
 
     }
 
@@ -114,10 +116,12 @@ public class RoninController2D : MonoBehaviour
         body.velocity = Vector2.zero;
         jumpsLeft -= 1;
 
-        // Check for collisions with ground
-        float mouseDistance = Mathf.Min(blinkDistance, Mathf.Sqrt(Mathf.Pow(mousePosition.x - transform.position.x, 2) + Mathf.Pow(mousePosition.y - transform.position.y, 2)));
+        // Compute mouse distance
+        float mouseDistance = Mathf.Sqrt(Mathf.Pow(mousePosition.x - transform.position.x, 2) + Mathf.Pow(mousePosition.y - transform.position.y, 2));
 
-        RaycastHit2D hit = Physics2D.Raycast(transform.position, mouseDirection, mouseDistance); // setting layerMask doesn't work while it should 
+        // Raycast to a set distance
+        float actualBlinkDistance = Mathf.Min(blinkDistance, mouseDistance);
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, mouseDirection, actualBlinkDistance); // setting layerMask doesn't work while it should 
         
         // If the ray hits the ground, the hit point becomes the new blink position
         if (hit.collider != null && hit.transform.tag == "Ground")
@@ -125,22 +129,28 @@ public class RoninController2D : MonoBehaviour
             blinkTimer = Time.time + blinkCooldown;
             transform.position = new Vector2(hit.point.x, hit.point.y);
         }
-        // If the ray hits an enemi, the blink position is set right behind the enemi position
-        // For flavor, we also reduce the blink cooldown to 0.5 sec and reset the additional jumps
+        // If the ray hits an enemi, the blink position is set to be right behind the enemy position
+        // For flavor, we also reduce the blink cooldown and reset additional jumps
         else if (hit.collider != null && hit.transform.tag == "Enemy")
         {
-            //Destroy(hit.transform.gameObject);
-            blinkTimer = Time.time + 0.5f;
+            // Manage player's behaviour
+            blinkTimer = Time.time + reducedBlinkCooldown;
             jumpsLeft = additionalJumps;
-            hit.collider.SendMessage("OnTriggerEnter2D", collid);
-            transform.position = new Vector2(hit.collider.transform.position.x + mouseDirection.x / mouseDirection.magnitude,
-                                             hit.collider.transform.position.y + mouseDirection.y / mouseDirection.magnitude);
+            transform.position = new Vector2(hit.collider.transform.position.x + mouseDirection.x / Mathf.Max(1, mouseDirection.magnitude),
+                                             hit.collider.transform.position.y + mouseDirection.y / Mathf.Max(1, mouseDirection.magnitude));
+
+            // Manage enemy's behaviour
+            //Destroy(hit.transform.gameObject
+            hit.collider.SendMessage("GetBlinkedOn");
+            
         }
-        // Else the blink is set to blinkDistance
+        // Else the blink is set to the min between the blink distance and the mouse distance
         else
         {
             blinkTimer = Time.time + blinkCooldown;
-            transform.position = new Vector2(mousePosition.x, mousePosition.y);
+            // Blink by replacing player position with: player.position + ray.direction * distance
+            transform.position = new Vector2(transform.position.x + mouseDirection.x * actualBlinkDistance / Mathf.Max(1, mouseDirection.magnitude),
+                                             transform.position.y + mouseDirection.y * actualBlinkDistance / Mathf.Max(1, mouseDirection.magnitude));
         }
 
         // Animation management
@@ -159,6 +169,18 @@ public class RoninController2D : MonoBehaviour
             jumpsLeft = additionalJumps;
         }
 
+    }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.tag == "Ground" && !Physics2D.Raycast(transform.position, Vector2.down, transform.localScale.y / 4.4f))
+        {
+            if (grounded)
+            {
+                // Ensures that if we run out of a platform, grounded becomes false
+                grounded = false;
+            }
+        }
     }
 
 }
